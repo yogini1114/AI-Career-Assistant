@@ -6,6 +6,10 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'backend'))
 from resume_parser import parse_resume
 from recommender import get_recommendations, get_skill_gaps
 from llm_layer import get_career_explanation
+from vector_db import ensure_jobs_loaded
+
+# Make sure ChromaDB has data (Streamlit Cloud filesystem is ephemeral)
+ensure_jobs_loaded()
 
 st.set_page_config(
     page_title="AI Career Assistant",
@@ -29,6 +33,7 @@ skills_input = st.sidebar.text_area(
 
 if st.sidebar.button("🔍 Get Recommendations"):
     student_skills = ""
+
     if uploaded_file:
         with st.spinner("Parsing resume..."):
             import tempfile
@@ -46,9 +51,12 @@ if st.sidebar.button("🔍 Get Recommendations"):
     if student_skills:
         with st.spinner("Finding best matches..."):
             recommendations = get_recommendations(student_skills)
-        
+
         st.header("🎯 Top Job Recommendations")
-        
+
+        if not recommendations:
+            st.warning("No recommendations found. Try different skills.")
+
         for i, job in enumerate(recommendations):
             with st.expander(f"#{i+1} {job['title']} at {job['company']} — {job['match_score']}% match"):
                 col1, col2 = st.columns(2)
@@ -60,6 +68,7 @@ if st.sidebar.button("🔍 Get Recommendations"):
                     st.write("**Skills to Learn:**")
                     for gap in gaps:
                         st.write(f"• {gap}")
+
                 if st.button(f"Get AI Advice for {job['title']}", key=f"btn_{i}"):
                     with st.spinner("Getting AI advice..."):
                         try:
