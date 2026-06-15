@@ -1,9 +1,9 @@
-streamlit==1.38.0
+streamlit
 chromadb==0.4.24
 sentence-transformers==2.7.0
-pymupdf==1.24.13
-pdfplumber==0.11.4
-pandas==2.2.2
-python-dotenv==1.0.1
-google-generativeai==0.7.2
-pysqlite3-binary==0.5.3
+pymupdf
+pdfplumber
+pandas
+python-dotenv
+google-generativeai
+pysqlite3-binary
