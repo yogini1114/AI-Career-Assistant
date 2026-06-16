@@ -7,3 +7,4 @@ pdfplumber
 pandas
 python-dotenv
 google-genai
+pysqlite3-binary
