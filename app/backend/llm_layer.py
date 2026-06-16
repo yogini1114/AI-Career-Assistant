@@ -1,11 +1,12 @@
 import os
+import time
 from dotenv import load_dotenv
 from google import genai
 
 load_dotenv()
 
 # -----------------------------
-# Load Gemini API Key
+# API KEY
 # -----------------------------
 try:
     import streamlit as st
@@ -23,9 +24,8 @@ if not api_key:
 # -----------------------------
 client = genai.Client(api_key=api_key)
 
-
 # -----------------------------
-# Career Recommendation
+# AI Career Explanation
 # -----------------------------
 def get_career_explanation(
     student_skills,
@@ -44,12 +44,12 @@ Recommended Job:
 Match Score:
 {recommended_job['match_score']}%
 
-Skills To Learn:
+Missing Skills:
 {', '.join(skill_gaps)}
 
 Provide:
 
-1. Why this role is suitable (2-3 lines)
+1. Why this role is recommended (2-3 lines)
 
 2. 30-60-90 Day Learning Roadmap
    - First 30 Days
@@ -59,23 +59,45 @@ Provide:
 3. Top 3 Interview Tips
 
 Use simple English.
-Keep response practical and concise.
+Keep response concise and practical.
 """
 
-    try:
+    # Retry 3 times if Gemini is busy
+    for attempt in range(3):
+        try:
 
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt
-        )
+            response = client.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=prompt
+            )
 
-        if response.text:
-            return response.text
+            if hasattr(response, "text") and response.text:
+                return response.text
 
-        return "No response generated."
+            return "No response generated."
 
-    except Exception as e:
-        return f"AI Error: {str(e)}"
+        except Exception as e:
+
+            error_msg = str(e)
+
+            # Gemini overloaded
+            if "503" in error_msg or "UNAVAILABLE" in error_msg:
+                time.sleep(5)
+                continue
+
+            # Quota exceeded
+            if "429" in error_msg:
+                return (
+                    "⚠️ Gemini API quota exceeded. "
+                    "Please try again later."
+                )
+
+            return f"⚠️ AI Error: {error_msg}"
+
+    return (
+        "⚠️ Gemini service is currently busy. "
+        "Please try again after a few minutes."
+    )
 
 
 # -----------------------------
@@ -90,7 +112,7 @@ if __name__ == "__main__":
     }
 
     sample_skills = (
-        "Python, Machine Learning, TensorFlow"
+        "Python, TensorFlow, Machine Learning"
     )
 
     sample_gaps = [
@@ -99,10 +121,10 @@ if __name__ == "__main__":
         "Kubernetes"
     ]
 
-    print(
-        get_career_explanation(
-            sample_skills,
-            sample_job,
-            sample_gaps
-        )
+    result = get_career_explanation(
+        sample_skills,
+        sample_job,
+        sample_gaps
     )
+
+    print(result)
