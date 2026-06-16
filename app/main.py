@@ -1,6 +1,9 @@
 import streamlit as st
 import sys
 import os
+import tempfile
+import traceback
+
 sys.path.append(os.path.join(os.path.dirname(__file__), 'backend'))
 
 from resume_parser import parse_resume
@@ -8,7 +11,7 @@ from recommender import get_recommendations, get_skill_gaps
 from llm_layer import get_career_explanation
 from vector_db import ensure_jobs_loaded
 
-# Make sure ChromaDB has data (Streamlit Cloud filesystem is ephemeral)
+# Load ChromaDB
 ensure_jobs_loaded()
 
 st.set_page_config(
@@ -20,10 +23,23 @@ st.set_page_config(
 st.title("🚀 AI Career Assistant")
 st.subheader("Upload your resume and get personalized career recommendations!")
 
+# --------------------------
+# Session State
+# --------------------------
+if "recommendations" not in st.session_state:
+    st.session_state.recommendations = []
+
+if "student_skills" not in st.session_state:
+    st.session_state.student_skills = ""
+
+# --------------------------
+# Sidebar
+# --------------------------
 st.sidebar.header("📄 Upload Resume")
+
 uploaded_file = st.sidebar.file_uploader(
     "Upload your PDF resume",
-    type=['pdf']
+    type=["pdf"]
 )
 
 skills_input = st.sidebar.text_area(
@@ -31,50 +47,134 @@ skills_input = st.sidebar.text_area(
     placeholder="Python, Machine Learning, SQL, TensorFlow..."
 )
 
+# --------------------------
+# Get Recommendations Button
+# --------------------------
 if st.sidebar.button("🔍 Get Recommendations"):
+
     student_skills = ""
 
-    if uploaded_file:
-        with st.spinner("Parsing resume..."):
-            import tempfile
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp:
-                tmp.write(uploaded_file.read())
-                tmp_path = tmp.name
-            resume_data = parse_resume(tmp_path)
-            student_skills = resume_data['skills_text']
-            st.success(f"Skills found: {student_skills}")
-    elif skills_input:
-        student_skills = skills_input
-    else:
-        st.error("Please upload a resume or enter skills!")
+    try:
 
-    if student_skills:
-        with st.spinner("Finding best matches..."):
-            recommendations = get_recommendations(student_skills)
+        if uploaded_file:
 
-        st.header("🎯 Top Job Recommendations")
+            with st.spinner("Parsing resume..."):
 
-        if not recommendations:
-            st.warning("No recommendations found. Try different skills.")
+                with tempfile.NamedTemporaryFile(
+                    delete=False,
+                    suffix=".pdf"
+                ) as tmp:
 
-        for i, job in enumerate(recommendations):
-            with st.expander(f"#{i+1} {job['title']} at {job['company']} — {job['match_score']}% match"):
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.metric("Match Score", f"{job['match_score']}%")
-                    st.metric("Salary", f"{job['salary']} LPA")
-                with col2:
-                    gaps = get_skill_gaps(student_skills, job['skills_required'])
-                    st.write("**Skills to Learn:**")
-                    for gap in gaps:
-                        st.write(f"• {gap}")
+                    tmp.write(uploaded_file.read())
+                    tmp_path = tmp.name
 
-                if st.button(f"Get AI Advice for {job['title']}", key=f"btn_{i}"):
-                    with st.spinner("Getting AI advice..."):
-                        try:
-                            explanation = get_career_explanation(
-                                student_skills, job, gaps
+                resume_data = parse_resume(tmp_path)
+
+                student_skills = resume_data["skills_text"]
+
+                st.sidebar.success(
+                    f"Skills found: {student_skills}"
+                )
+
+        elif skills_input:
+
+            student_skills = skills_input
+
+        else:
+
+            st.error(
+                "Please upload a resume or enter skills!"
+            )
+
+        if student_skills:
+
+            with st.spinner("Finding best matches..."):
+
+                recommendations = get_recommendations(
+                    student_skills
+                )
+
+            st.session_state.student_skills = student_skills
+            st.session_state.recommendations = recommendations
+
+    except Exception as e:
+
+        st.error(f"Error: {e}")
+        st.code(traceback.format_exc())
+
+# --------------------------
+# Display Recommendations
+# --------------------------
+if st.session_state.recommendations:
+
+    st.header("🎯 Top Job Recommendations")
+
+    recommendations = st.session_state.recommendations
+    student_skills = st.session_state.student_skills
+
+    for i, job in enumerate(recommendations):
+
+        with st.expander(
+            f"#{i+1} {job['title']} at {job['company']} — {job['match_score']}% match"
+        ):
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+
+                st.metric(
+                    "Match Score",
+                    f"{job['match_score']}%"
+                )
+
+                st.metric(
+                    "Salary",
+                    f"{job['salary']} LPA"
+                )
+
+            with col2:
+
+                gaps = get_skill_gaps(
+                    student_skills,
+                    job["skills_required"]
+                )
+
+                st.write("### Skills to Learn")
+
+                for gap in gaps:
+                    st.write(f"• {gap}")
+
+            # --------------------------
+            # AI Advice Button
+            # --------------------------
+            if st.button(
+                f"🤖 Get AI Advice for {job['title']}",
+                key=f"ai_btn_{i}"
+            ):
+
+                try:
+
+                    with st.spinner(
+                        "Getting AI career advice..."
+                    ):
+
+                        explanation = (
+                            get_career_explanation(
+                                student_skills,
+                                job,
+                                gaps
                             )
-                            st.write(explanation)
-                        except:
-                            st.warning("AI advice unavailable right now!")
+                        )
+
+                    st.success("AI Advice Generated")
+                    st.markdown(explanation)
+
+                except Exception as e:
+
+                    st.error(
+                        f"AI Error: {e}"
+                    )
+
+                    st.code(
+                        traceback.format_exc()
+                    )
