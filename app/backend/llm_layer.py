@@ -3,7 +3,15 @@ import os
 from dotenv import load_dotenv
 
 load_dotenv()
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+
+# Local pe .env se, Streamlit Cloud pe st.secrets se
+try:
+    import streamlit as st
+    api_key = st.secrets["GEMINI_API_KEY"]
+except:
+    api_key = os.getenv("GEMINI_API_KEY")
+
+genai.configure(api_key=api_key)
 model = genai.GenerativeModel('gemini-2.0-flash-lite')
 
 def get_career_explanation(student_skills, recommended_job, skill_gaps):
@@ -11,7 +19,7 @@ def get_career_explanation(student_skills, recommended_job, skill_gaps):
     You are a career counselor for Indian tech students.
 
     Student Skills: {student_skills}
-    Recommened Job: {recommended_job['title']} at {recommended_job['company']}
+    Recommended Job: {recommended_job['title']} at {recommended_job['company']}
     Match Score: {recommended_job['match_score']}%
     Skills to Learn: {skill_gaps}
 
@@ -27,7 +35,7 @@ def get_career_explanation(student_skills, recommended_job, skill_gaps):
     return response.text
 
 if __name__ == "__main__":
-    test_job ={
+    test_job = {
         'title': 'Machine Learning Engineer',
         'company': 'BSNL',
         'match_score': 50.0
